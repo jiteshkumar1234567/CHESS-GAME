@@ -1,14 +1,25 @@
+// ✅ dotenv load (TOP PE ZAROORI)
+require("dotenv").config();
+
 const express = require("express");
 const http = require("http");
-const socketIO = require("socket.io");
+const { Server } = require("socket.io");
 const path = require("path");
 const { Chess } = require("chess.js");
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIO(server);
+
+// ✅ socket.io FIX
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 const chess = new Chess();
+
 let players = {
   white: null,
   black: null,
@@ -16,6 +27,7 @@ let players = {
 };
 
 app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/", (req, res) => {
@@ -35,7 +47,10 @@ io.on("connection", socket => {
     socket.emit("spectator");
   }
 
-  socket.emit("boardState", { fen: chess.fen(), scores: players.scores });
+  socket.emit("boardState", {
+    fen: chess.fen(),
+    scores: players.scores
+  });
 
   socket.on("move", move => {
     try {
@@ -45,14 +60,16 @@ io.on("connection", socket => {
       const result = chess.move(move);
 
       if (result) {
-        // Score for captured piece
         if (result.captured) {
-          const pieceValue = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+          const pieceValue = { p:1, n:3, b:3, r:5, q:9 };
           const scorer = chess.turn() === "b" ? "w" : "b";
-          players.scores[scorer] += pieceValue[result.captured];
+          players.scores[scorer] += pieceValue[result.captured] || 0;
         }
 
-        io.emit("boardState", { fen: chess.fen(), scores: players.scores });
+        io.emit("boardState", {
+          fen: chess.fen(),
+          scores: players.scores
+        });
       }
     } catch (err) {
       console.log("Invalid move");
@@ -62,13 +79,21 @@ io.on("connection", socket => {
   socket.on("reset", () => {
     chess.reset();
     players.scores = { w: 0, b: 0 };
-    io.emit("boardState", { fen: chess.fen(), scores: players.scores });
+    io.emit("boardState", {
+      fen: chess.fen(),
+      scores: players.scores
+    });
   });
 
   socket.on("disconnect", () => {
-    if (socket.id === players.white) delete players.white;
-    if (socket.id === players.black) delete players.black;
+    if (socket.id === players.white) players.white = null;
+    if (socket.id === players.black) players.black = null;
   });
 });
 
-server.listen(3000, () => console.log("🔥 Server running on port 3000"));
+// ✅ PORT from .env / Render
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
